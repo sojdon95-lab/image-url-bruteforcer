@@ -60,16 +60,62 @@
             margin-bottom: 20px;
         }
         
-        input {
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .tab-button {
+            background: transparent;
+            color: rgba(255, 255, 255, 0.7);
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-weight: bold;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+            align-self: auto;
+            font-size: 1rem;
+        }
+        
+        .tab-button.active {
+            color: white;
+            border-bottom-color: #ff6b6b;
+        }
+        
+        .tab-button:hover {
+            color: white;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        input[type="text"],
+        textarea {
             padding: 15px;
             border: none;
             border-radius: 8px;
             background: rgba(255, 255, 255, 0.15);
             color: white;
             font-size: 1rem;
+            font-family: inherit;
         }
         
-        input::placeholder {
+        textarea {
+            resize: vertical;
+            min-height: 150px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        input::placeholder,
+        textarea::placeholder {
             color: rgba(255, 255, 255, 0.7);
         }
         
@@ -83,6 +129,7 @@
             font-weight: bold;
             transition: all 0.3s ease;
             align-self: flex-start;
+            font-size: 1rem;
         }
         
         button:hover {
@@ -266,6 +313,16 @@
             margin: 15px 0;
             display: none;
         }
+        
+        .success-message {
+            background: rgba(76, 205, 196, 0.3);
+            border: 1px solid #4ecdc4;
+            color: #ccffff;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -278,12 +335,28 @@
         <main>
             <div class="card">
                 <h2>Image Pattern Finder</h2>
-                <p>Enter a base image URL to find related images through pattern variations</p>
+                <p>Enter image URLs to analyze and brute-force patterns</p>
                 
                 <div id="errorMessage" class="error-message"></div>
+                <div id="successMessage" class="success-message"></div>
+                
+                <div class="tab-buttons">
+                    <button class="tab-button active" data-tab="single-url">Single URL</button>
+                    <button class="tab-button" data-tab="multi-url">Multiple URLs (Better)</button>
+                </div>
                 
                 <div class="input-group">
-                    <input type="text" id="baseImageUrl" placeholder="https://example.com/images/abc123def456.jpg">
+                    <!-- Single URL Tab -->
+                    <div id="single-url" class="tab-content active">
+                        <input type="text" id="baseImageUrl" placeholder="https://example.com/images/abc123def456.jpg">
+                    </div>
+                    
+                    <!-- Multiple URLs Tab -->
+                    <div id="multi-url" class="tab-content">
+                        <label for="multiUrlInput">Paste multiple URLs (one per line):</label>
+                        <textarea id="multiUrlInput" placeholder="https://example.com/images/hash1/hash2.jpg&#10;https://example.com/images/hash3/hash4.jpg&#10;https://example.com/images/hash5/hash6.jpg"></textarea>
+                        <small style="opacity: 0.7; margin-top: 8px;">Tip: Enter 3-5 sample URLs from the same source. The system will analyze the pattern and brute-force the varying parts.</small>
+                    </div>
                     
                     <div class="controls">
                         <div class="control-group">
@@ -307,8 +380,8 @@
                         </div>
                         
                         <div class="control-group">
-                            <label for="lengthRange">ID Length</label>
-                            <input type="number" id="lengthRange" min="10" max="100" value="64">
+                            <label for="lengthRange">ID Length (leave blank to auto-detect)</label>
+                            <input type="number" id="lengthRange" min="10" max="100" placeholder="64">
                         </div>
                     </div>
                     
@@ -335,9 +408,10 @@
             <div class="info-section card">
                 <h3>How It Works</h3>
                 <ul>
-                    <li>Enter a base image URL to analyze its structure</li>
-                    <li>The system identifies the pattern (domain, directory, ID, filename, extension)</li>
-                    <li>It then generates variations of the ID part using the selected character set</li>
+                    <li><strong>Single URL Mode:</strong> Enter one image URL. System will identify ID parts and generate variations.</li>
+                    <li><strong>Multiple URLs Mode (RECOMMENDED):</strong> Paste 3-5 sample URLs from the same source. System analyzes which parts vary and brute-forces only those parts intelligently.</li>
+                    <li>The system identifies all hash-like patterns in the URL structure</li>
+                    <li>It generates random variations using your selected character set</li>
                     <li>Each generated URL is tested for validity via the server (bypassing CORS)</li>
                     <li>Valid images are displayed and listed</li>
                 </ul>
@@ -356,8 +430,26 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Tab switching
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const tabName = this.dataset.tab;
+                    
+                    tabButtons.forEach(b => b.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    
+                    this.classList.add('active');
+                    document.getElementById(tabName).classList.add('active');
+                });
+            });
+            
+            // Main functionality
             const startBtn = document.getElementById('startBruteforce');
             const baseImageUrlInput = document.getElementById('baseImageUrl');
+            const multiUrlInput = document.getElementById('multiUrlInput');
             const statusDiv = document.getElementById('status');
             const resultsDiv = document.getElementById('results');
             const imageGrid = document.getElementById('imageGrid');
@@ -365,6 +457,7 @@
             const foundCountSpan = document.getElementById('foundCount');
             const progressBar = document.getElementById('progressBar');
             const errorMessage = document.getElementById('errorMessage');
+            const successMessage = document.getElementById('successMessage');
             const extensionSelect = document.getElementById('extensionSelect');
             const charSetSelect = document.getElementById('charSetSelect');
             const lengthRange = document.getElementById('lengthRange');
@@ -372,21 +465,55 @@
             function showError(message) {
                 errorMessage.textContent = message;
                 errorMessage.style.display = 'block';
+                successMessage.style.display = 'none';
             }
             
-            function hideError() {
+            function showSuccess(message) {
+                successMessage.textContent = message;
+                successMessage.style.display = 'block';
                 errorMessage.style.display = 'none';
             }
             
+            function hideMessages() {
+                errorMessage.style.display = 'none';
+                successMessage.style.display = 'none';
+            }
+            
             startBtn.addEventListener('click', async function() {
-                const baseUrl = baseImageUrlInput.value.trim();
+                const activeTab = document.querySelector('.tab-content.active').id;
+                let baseUrl = null;
+                let urls = null;
                 
-                if (!baseUrl) {
-                    showError('Please enter a base image URL');
-                    return;
+                if (activeTab === 'single-url') {
+                    baseUrl = baseImageUrlInput.value.trim();
+                    if (!baseUrl) {
+                        showError('Please enter a base image URL');
+                        return;
+                    }
+                } else {
+                    const multiUrlText = multiUrlInput.value.trim();
+                    if (!multiUrlText) {
+                        showError('Please paste multiple image URLs');
+                        return;
+                    }
+                    urls = multiUrlText.split('\n')
+                        .map(url => url.trim())
+                        .filter(url => url.length > 0 && url.startsWith('http'));
+                    
+                    if (urls.length === 0) {
+                        showError('No valid URLs found. Please paste valid HTTP(S) URLs.');
+                        return;
+                    }
+                    
+                    if (urls.length < 2) {
+                        showError('Please provide at least 2 sample URLs for pattern analysis.');
+                        return;
+                    }
+                    
+                    baseUrl = urls[0];
                 }
                 
-                hideError();
+                hideMessages();
                 
                 // Show loading state
                 statusDiv.style.display = 'block';
@@ -403,8 +530,9 @@
                         },
                         body: JSON.stringify({
                             baseUrl: baseUrl,
+                            urls: urls,
                             charSet: charSetSelect.value,
-                            idLength: parseInt(lengthRange.value),
+                            idLength: lengthRange.value ? parseInt(lengthRange.value) : null,
                             extension: extensionSelect.value
                         })
                     });
@@ -432,6 +560,7 @@
                         showError('No images found. Try different parameters.');
                         statusDiv.style.display = 'none';
                     } else {
+                        showSuccess(`✓ Found ${foundImages.length} images! (Tested ${data.totalTested} URLs)`);
                         resultsDiv.style.display = 'block';
                         
                         // Clear previous results
